@@ -17,7 +17,6 @@ import {
   CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -86,10 +85,9 @@ interface DifficultyChipProps {
   selected: boolean
   onClick: () => void
   label: string
-  color: string
   selectedColor: string
 }
-function DifficultyChip({ value, selected, onClick, label, color, selectedColor }: DifficultyChipProps) {
+function DifficultyChip({ value, selected, onClick, label, selectedColor }: DifficultyChipProps) {
   return (
     <button
       type="button"
