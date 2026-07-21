@@ -419,14 +419,21 @@ export default function StudentQuiz({
           }),
         })
 
+        const text = await response.text()
+        let data
+        try {
+          data = JSON.parse(text)
+        } catch (err) {
+          throw new Error('API Error: Received HTML instead of JSON. Ensure you are running the backend (e.g. vercel dev / npm run dev:full).')
+        }
+
         if (!response.ok) {
-          const data = (await response.json()) as { error?: string }
           throw new Error(data.error ?? 'Failed to load question')
         }
 
-        const data = (await response.json()) as DiagnoseResponse
-        setQuestionText(data.nextQuestion)
-        setHints(data.hints)
+        const diagData = data as DiagnoseResponse
+        setQuestionText(diagData.nextQuestion)
+        setHints(diagData.hints)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Something went wrong')
       } finally {
@@ -468,13 +475,20 @@ export default function StudentQuiz({
         }),
       })
 
+      const text = await response.text()
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch (err) {
+        throw new Error('API Error: Received HTML instead of JSON. Ensure you are running the backend (e.g. vercel dev / npm run dev:full).')
+      }
+
       if (!response.ok) {
-        const data = (await response.json()) as { error?: string }
         throw new Error(data.error ?? 'Failed to analyze answer')
       }
 
-      const data = (await response.json()) as DiagnoseResponse
-      setFeedback(data)
+      const diagData = data as DiagnoseResponse
+      setFeedback(diagData)
 
       // Save response to Supabase
       const hintsUsed = hints.slice(0, revealedHints)
@@ -484,9 +498,9 @@ export default function StudentQuiz({
         question_text: questionText,
         student_answer: answer,
         student_reasoning: reasoning,
-        is_correct: data.isCorrect,
-        detected_misconception: data.detectedMisconception,
-        ai_explanation: data.explanation,
+        is_correct: diagData.isCorrect,
+        detected_misconception: diagData.detectedMisconception,
+        ai_explanation: diagData.explanation,
         hints_used: hintsUsed,
       })
 
