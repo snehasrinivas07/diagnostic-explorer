@@ -14,7 +14,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
+import { GoogleGenerativeAI, SchemaType, type Schema } from '@google/generative-ai'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ const DIFFICULTY_CALIBRATION: Readonly<Record<Difficulty, string>> = {
 
 // ─── Gemini response schema ───────────────────────────────────────────────────
 
-const responseSchema = {
+const responseSchema: Schema = {
   type: SchemaType.OBJECT,
   properties: {
     isCorrect: {
@@ -188,7 +188,7 @@ Return valid JSON exactly matching the schema.`
 
 // ─── Input validation ─────────────────────────────────────────────────────────
 
-interface ValidationResult {
+type ValidationResult = {
   ok: true
   body: DiagnoseBody
 } | {
@@ -313,9 +313,7 @@ export default async function handler(
     return
   }
 
-  // Validate API key safely
-  // @ts-ignore
-  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || (typeof import !== 'undefined' && import.meta?.env?.VITE_GEMINI_API_KEY)
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY
   
   const fallbackResponse = {
     isCorrect: false,
