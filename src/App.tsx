@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
+import type { Session, User } from '@supabase/supabase-js'
 import {
   BookOpenCheck,
   GraduationCap,
@@ -131,16 +131,23 @@ export default function App() {
   // Scroll-to-top when step changes
   const mainRef = useRef<HTMLDivElement>(null)
 
-  const loadProfile = async (userId: string): Promise<Profile | null> => {
+  const loadProfile = async (user: User): Promise<Profile> => {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', userId)
+      .eq('id', user.id)
       .single()
 
     if (error) {
-      console.error('Failed to load profile:', error.message)
-      return null
+      console.warn('Failed to load profile from DB, using fallback:', error.message)
+      return {
+        id: user.id,
+        email: user.email ?? '',
+        full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+        role: (user.user_metadata?.role as UserRole) || 'student',
+        created_at: user.created_at,
+        updated_at: user.updated_at || user.created_at,
+      }
     }
     return data as Profile
   }
@@ -149,9 +156,13 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       setSession(currentSession)
       if (currentSession?.user) {
-        void loadProfile(currentSession.user.id).then(setProfile)
+        void loadProfile(currentSession.user).then((p) => {
+          setProfile(p)
+          setLoading(false)
+        })
+      } else {
+        setLoading(false)
       }
-      setLoading(false)
     })
 
     const {
@@ -159,7 +170,7 @@ export default function App() {
     } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession)
       if (currentSession?.user) {
-        void loadProfile(currentSession.user.id).then(setProfile)
+        void loadProfile(currentSession.user).then(setProfile)
       } else {
         setProfile(null)
       }
