@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Session, User } from '@supabase/supabase-js'
+import type { Session, User as SupabaseUser } from '@supabase/supabase-js'
 import {
   BookOpenCheck,
   GraduationCap,
@@ -131,7 +131,7 @@ export default function App() {
   // Scroll-to-top when step changes
   const mainRef = useRef<HTMLDivElement>(null)
 
-  const loadProfile = async (user: User): Promise<Profile> => {
+  const loadProfile = async (user: SupabaseUser): Promise<Profile> => {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
