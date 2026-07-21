@@ -580,7 +580,6 @@ export default function App() {
                           selected={difficulty === 'beginner'}
                           onClick={() => setDifficulty('beginner')}
                           label="Beginner"
-                          color=""
                           selectedColor="border-emerald-300 bg-emerald-50 text-emerald-700"
                         />
                         <DifficultyChip
@@ -588,7 +587,6 @@ export default function App() {
                           selected={difficulty === 'intermediate'}
                           onClick={() => setDifficulty('intermediate')}
                           label="Intermediate"
-                          color=""
                           selectedColor="border-amber-300 bg-amber-50 text-amber-700"
                         />
                         <DifficultyChip
@@ -596,7 +594,6 @@ export default function App() {
                           selected={difficulty === 'advanced'}
                           onClick={() => setDifficulty('advanced')}
                           label="Advanced"
-                          color=""
                           selectedColor="border-red-300 bg-red-50 text-red-700"
                         />
                       </div>
