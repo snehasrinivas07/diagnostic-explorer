@@ -313,11 +313,21 @@ export default async function handler(
     return
   }
 
-  // Validate API key
-  const apiKey = process.env.GEMINI_API_KEY
+  // Validate API key safely
+  // @ts-ignore
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || (typeof import !== 'undefined' && import.meta?.env?.VITE_GEMINI_API_KEY)
+  
+  const fallbackResponse = {
+    isCorrect: false,
+    detectedMisconception: null,
+    explanation: "Our AI diagnostic service is currently unavailable. This is a fallback response.",
+    nextQuestion: "AI Error: Please ensure the GEMINI_API_KEY is configured correctly in your server environment or .env file.",
+    hints: ["Check your .env file.", "Verify Vercel environment variables.", "Ensure you have a valid Gemini API key."]
+  }
+
   if (!apiKey) {
     console.error('[diagnose] GEMINI_API_KEY is not set in environment.')
-    res.status(500).json({ error: 'Server configuration error: missing API key.' })
+    res.status(200).json(fallbackResponse)
     return
   }
 
@@ -381,14 +391,11 @@ export default async function handler(
     const message = err instanceof Error ? err.message : String(err)
     console.error('[diagnose] Gemini API error:', message)
 
-    // Surface rate limit errors distinctly
-    if (message.toLowerCase().includes('quota') || message.toLowerCase().includes('rate')) {
-      res.status(429).json({ error: 'AI service rate limit reached. Please wait a moment and try again.' })
-      return
+    // Return the structured fallback response instead of a raw 500 error
+    const errorFallback = {
+      ...fallbackResponse,
+      explanation: `AI Generation Error: ${message.slice(0, 100)}...`,
     }
-
-    res.status(500).json({
-      error: `Failed to process request: ${message}`,
-    })
+    res.status(200).json(errorFallback)
   }
 }
