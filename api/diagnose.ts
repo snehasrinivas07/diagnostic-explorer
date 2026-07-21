@@ -347,7 +347,7 @@ export default async function handler(
     const genAI = new GoogleGenerativeAI(apiKey)
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
         responseSchema,
@@ -388,6 +388,7 @@ export default async function handler(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[diagnose] Gemini API error:', message)
+    console.error('Gemini error details:', err)
 
     // Return the structured fallback response instead of a raw 500 error
     const errorFallback = {
