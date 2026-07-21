@@ -10,6 +10,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(
-  supabaseUrl ?? '',
-  supabaseAnonKey ?? '',
+  supabaseUrl as string,
+  supabaseAnonKey as string,
 )
