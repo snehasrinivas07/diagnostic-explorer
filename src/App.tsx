@@ -93,11 +93,10 @@ function DifficultyChip({ value, selected, onClick, label, selectedColor }: Diff
       type="button"
       data-difficulty={value}
       onClick={onClick}
-      className={`flex-1 rounded-lg border px-3 py-2.5 text-xs font-semibold tracking-wide transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-        selected
+      className={`flex-1 rounded-lg border px-3 py-2.5 text-xs font-semibold tracking-wide transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${selected
           ? `${selectedColor} shadow-sm`
           : `border-slate-200/80 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700`
-      }`}
+        }`}
     >
       {label}
     </button>
@@ -109,6 +108,9 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Interactive View Override State
+  const [activeRole, setActiveRole] = useState<UserRole>('student')
 
   // Auth form state
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
@@ -158,6 +160,7 @@ export default function App() {
       if (currentSession?.user) {
         void loadProfile(currentSession.user).then((p) => {
           setProfile(p)
+          setActiveRole(p.role)
           setLoading(false)
         })
       } else {
@@ -170,7 +173,10 @@ export default function App() {
     } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession)
       if (currentSession?.user) {
-        void loadProfile(currentSession.user).then(setProfile)
+        void loadProfile(currentSession.user).then((p) => {
+          setProfile(p)
+          setActiveRole(p.role)
+        })
       } else {
         setProfile(null)
       }
@@ -257,6 +263,11 @@ export default function App() {
     setSessionError(null)
   }
 
+  // Helper function to toggle role view
+  const toggleActiveRole = () => {
+    setActiveRole((prev) => (prev === 'student' ? 'teacher' : 'student'))
+  }
+
   // ─── Loading splash ───────────────────────────────────────────────────────
   if (loading) {
     return <AuthSkeleton />
@@ -303,11 +314,10 @@ export default function App() {
                     setAuthMode(mode)
                     setAuthError(null)
                   }}
-                  className={`flex-1 px-4 py-3.5 text-sm font-semibold tracking-wide transition-all duration-200 ${
-                    authMode === mode
+                  className={`flex-1 px-4 py-3.5 text-sm font-semibold tracking-wide transition-all duration-200 ${authMode === mode
                       ? 'border-b-2 border-indigo-600 text-indigo-600'
                       : 'text-slate-500 hover:text-slate-700'
-                  }`}
+                    }`}
                 >
                   {mode === 'login' ? 'Sign In' : 'Sign Up'}
                 </button>
@@ -450,7 +460,7 @@ export default function App() {
           {/* Right side */}
           <div className="flex items-center gap-3">
             {/* Breadcrumb for student flow */}
-            {profile.role === 'student' && studentStep !== 'setup' && (
+            {activeRole === 'student' && studentStep !== 'setup' && (
               <div className="hidden items-center gap-1.5 text-xs text-slate-500 sm:flex">
                 <button
                   type="button"
@@ -464,22 +474,28 @@ export default function App() {
               </div>
             )}
 
-            {/* Role badge */}
-            <Badge
-              variant="outline"
-              className={`hidden items-center gap-1.5 text-[11px] sm:flex ${
-                profile.role === 'teacher'
-                  ? 'border-violet-200 bg-violet-50 text-violet-600'
-                  : 'border-indigo-200 bg-indigo-50 text-indigo-600'
-              }`}
+            {/* Clickable Role badge toggle */}
+            <button
+              type="button"
+              onClick={toggleActiveRole}
+              title="Click to switch between Student and Teacher views"
+              className="group focus:outline-none"
             >
-              {profile.role === 'teacher' ? (
-                <GraduationCap className="size-3" />
-              ) : (
-                <BookOpenCheck className="size-3" />
-              )}
-              <span className="capitalize">{profile.role}</span>
-            </Badge>
+              <Badge
+                variant="outline"
+                className={`flex items-center gap-1.5 text-[11px] transition-all group-hover:scale-105 cursor-pointer ${activeRole === 'teacher'
+                    ? 'border-violet-200 bg-violet-50 text-violet-600 hover:bg-violet-100'
+                    : 'border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                  }`}
+              >
+                {activeRole === 'teacher' ? (
+                  <GraduationCap className="size-3" />
+                ) : (
+                  <BookOpenCheck className="size-3" />
+                )}
+                <span className="capitalize">{activeRole}</span>
+              </Badge>
+            </button>
 
             <Button
               id="sign-out-btn"
@@ -495,7 +511,7 @@ export default function App() {
         </div>
 
         {/* Student step progress indicator */}
-        {profile.role === 'student' && (
+        {activeRole === 'student' && (
           <div className="flex h-0.5 w-full">
             <div
               className="h-full bg-indigo-600 transition-all duration-500 ease-out"
@@ -514,7 +530,7 @@ export default function App() {
 
       {/* Main content */}
       <main ref={mainRef} className="flex-1 py-8">
-        {profile.role === 'teacher' ? (
+        {activeRole === 'teacher' ? (
           <TeacherDash />
         ) : (
           <>
