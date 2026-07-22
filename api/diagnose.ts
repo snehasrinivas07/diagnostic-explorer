@@ -1,11 +1,11 @@
 /**
  * api/diagnose.ts
- * Vercel Serverless Function — Gemini 2.5 Flash adaptive diagnostic proxy.
+ * Vercel Serverless Function — Gemini 3.6 Flash adaptive diagnostic proxy.
  *
  * Responsibilities:
  *  1. Validate inbound request (method, body shape, field ranges).
  *  2. Build a zone-aware, difficulty-calibrated prompt.
- *  3. Call Gemini 2.5 Flash with structured JSON output (responseSchema).
+ *  3. Call Gemini 3.6 Flash with structured JSON output (responseSchema).
  *  4. Normalise & sanitise the parsed response.
  *  5. Return the DiagnoseResult or a structured error.
  *
@@ -296,7 +296,7 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ): Promise<void> {
-  // CORS headers — tighten `Access-Control-Allow-Origin` in production if needed
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
@@ -308,16 +308,13 @@ export default async function handler(
     return
   }
 
-  const isApiKeySet = !!(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)
-  console.log("GEMINI_API_KEY status:", isApiKeySet)
-
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed. Use POST.' })
     return
   }
 
   const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY
-  
+
   const fallbackResponse = {
     isCorrect: false,
     detectedMisconception: null,
@@ -350,7 +347,7 @@ export default async function handler(
     const genAI = new GoogleGenerativeAI(apiKey)
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       generationConfig: {
         responseMimeType: 'application/json',
         responseSchema,
@@ -368,11 +365,11 @@ export default async function handler(
       return
     }
 
-    // Parse — Gemini with responseMimeType=application/json should always return valid JSON,
-    // but we guard anyway.
+    // Parse safely — strip markdown block wrappers if present before parsing
     let parsed: unknown
     try {
-      parsed = JSON.parse(rawText)
+      const sanitizedJson = rawText.replace(/```json|```/g, '').trim()
+      parsed = JSON.parse(sanitizedJson)
     } catch {
       console.error('[diagnose] Failed to parse Gemini JSON:', rawText.slice(0, 300))
       res.status(502).json({ error: 'The AI returned an unparseable response. Please try again.' })
@@ -393,7 +390,6 @@ export default async function handler(
     console.error('[diagnose] Gemini API error:', message)
     console.error('Full Gemini Error:', err)
 
-    // Return the structured fallback response instead of a raw 500 error
     const errorFallback = {
       ...fallbackResponse,
       explanation: `AI Generation Error: ${message.slice(0, 100)}...`,
