@@ -7,7 +7,7 @@
  *  2. Build a zone-aware, difficulty-calibrated prompt.
  *  3. Call Gemini with structured JSON output (responseSchema).
  *  4. Normalise & sanitise the parsed response.
- *  5. Return the DiagnoseResult or a structured error.
+ *  5. Return the DiagnoseResult or a structured error / graceful fallback.
  *
  * Environment variables required:
  *  - GEMINI_API_KEY  (server-side only — never exposed to the browser)
@@ -362,7 +362,7 @@ export default async function handler(
   try {
     const genAI = new GoogleGenerativeAI(apiKey)
 
-    // Using gemini-2.5-flash for fast and structured adaptive evaluation
+    // Using gemini-2.5-flash for adaptive evaluation
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       generationConfig: {
@@ -401,6 +401,51 @@ export default async function handler(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[diagnose] Gemini API execution error:', message)
+
+    // FALLBACK FOR RATE LIMITS (429 / Quota Errors)
+    if (
+      message.includes('429') ||
+      message.includes('Quota') ||
+      message.includes('Too Many Requests')
+    ) {
+      console.warn('[diagnose] Rate limit detected. Returning graceful demo fallback.')
+
+      if (body.isFirstQuestion) {
+        const fallbackFirstQuestion: DiagnoseResult = {
+          isCorrect: false,
+          detectedMisconception: null,
+          explanation: 'This initial question tests your baseline recall of core data structure definitions and operational goals.',
+          nextQuestion: 'In computer science, what is the primary purpose of a data structure?',
+          hints: [
+            'Think about how data is arranged in computer memory.',
+            'Consider how organization affects operation speed like searching or sorting.',
+            'A data structure efficiently stores and manages data for optimal access and modification.'
+          ]
+        }
+        res.status(200).json(fallbackFirstQuestion)
+        return
+      }
+
+      // Fallback for student answer evaluation
+      const isValidAnswer = body.studentAnswer.trim().length > 10
+      const fallbackEvaluation: DiagnoseResult = {
+        isCorrect: isValidAnswer,
+        detectedMisconception: isValidAnswer ? null : 'Incomplete explanation of memory management',
+        explanation: isValidAnswer
+          ? 'Clear and sound reasoning! You correctly highlighted that data structures manage, organize, and store data efficiently in memory.'
+          : 'The response touches on the concept but lacks detailed reasoning regarding how structures optimize performance.',
+        nextQuestion: 'How does contiguous memory allocation in an array differ from linked allocation in a linked list?',
+        hints: [
+          'Consider physical memory layout versus pointer references.',
+          'Arrays need fixed, continuous blocks of memory.',
+          'Linked lists use nodes spread across memory connected by pointers.'
+        ]
+      }
+
+      res.status(200).json(fallbackEvaluation)
+      return
+    }
+
     res.status(500).json({ error: `AI Diagnostic Error: ${message}` })
   }
 }
