@@ -247,7 +247,7 @@ export default function TeacherDash() {
         .select('*, profiles(full_name, email)')
         .order('started_at', { ascending: false }),
       supabase
-        .from('responses')
+        .from('quiz_responses')
         .select('*')
         .order('created_at', { ascending: false }),
     ])
@@ -271,7 +271,7 @@ export default function TeacherDash() {
       .channel('teacher-dashboard')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'responses' },
+        { event: 'INSERT', schema: 'public', table: 'quiz_responses' },
         (payload) => {
           const newResponse = payload.new as QuizResponse
           setResponses((prev) => [newResponse, ...prev])
@@ -367,11 +367,10 @@ export default function TeacherDash() {
           {/* Connection status */}
           <Badge
             variant="outline"
-            className={`gap-2 border ${
-              connected
+            className={`gap-2 border ${connected
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                 : 'border-slate-200 bg-slate-50 text-slate-500'
-            }`}
+              }`}
           >
             <Radio className="size-3" />
             {connected ? 'Realtime Connected' : 'Connecting…'}
@@ -496,11 +495,10 @@ export default function TeacherDash() {
               return (
                 <Card
                   key={session.id}
-                  className={`relative overflow-hidden border bg-white shadow-sm transition-all duration-300 hover:shadow-md ${
-                    isActive
+                  className={`relative overflow-hidden border bg-white shadow-sm transition-all duration-300 hover:shadow-md ${isActive
                       ? 'border-slate-200/80'
                       : 'border-slate-100 opacity-80'
-                  }`}
+                    }`}
                 >
                   {/* Active highlight strip */}
                   {isActive && (
@@ -544,13 +542,12 @@ export default function TeacherDash() {
                         {ZONES.map((z) => (
                           <div
                             key={z.number}
-                            className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
-                              session.completed || z.number < session.current_zone
+                            className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${session.completed || z.number < session.current_zone
                                 ? 'bg-emerald-500'
                                 : z.number === session.current_zone && !session.completed
                                   ? 'bg-indigo-500'
                                   : 'bg-slate-200'
-                            }`}
+                              }`}
                           />
                         ))}
                       </div>
@@ -566,11 +563,10 @@ export default function TeacherDash() {
                       </Badge>
                       <Badge
                         variant="outline"
-                        className={`text-[10px] ${
-                          session.completed
+                        className={`text-[10px] ${session.completed
                             ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
                             : 'border-indigo-200 bg-indigo-50 text-indigo-600'
-                        }`}
+                          }`}
                       >
                         {session.completed ? 'Completed' : `Zone ${session.current_zone} · ${ZONES.find((z) => z.number === session.current_zone)?.name ?? ''}`}
                       </Badge>
