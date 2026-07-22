@@ -365,11 +365,18 @@ export default async function handler(
       return
     }
 
-    // Parse safely — strip markdown block wrappers if present before parsing
+    // Safe JSON parsing: strip markdown code fences & isolate outer JSON braces
     let parsed: unknown
     try {
-      const sanitizedJson = rawText.replace(/```json|```/g, '').trim()
-      parsed = JSON.parse(sanitizedJson)
+      let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim()
+
+      const firstBrace = cleaned.indexOf('{')
+      const lastBrace = cleaned.lastIndexOf('}')
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        cleaned = cleaned.substring(firstBrace, lastBrace + 1)
+      }
+
+      parsed = JSON.parse(cleaned)
     } catch {
       console.error('[diagnose] Failed to parse Gemini JSON:', rawText.slice(0, 300))
       res.status(502).json({ error: 'The AI returned an unparseable response. Please try again.' })
