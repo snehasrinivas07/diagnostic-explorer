@@ -133,13 +133,12 @@ function ZoneStepper({
             {/* Step node */}
             <div className="flex flex-col items-center gap-1">
               <div
-                className={`flex size-8 items-center justify-center rounded-full border-2 text-xs font-bold transition-all duration-300 ${
-                  isCompleted
+                className={`flex size-8 items-center justify-center rounded-full border-2 text-xs font-bold transition-all duration-300 ${isCompleted
                     ? 'border-emerald-400 bg-emerald-500 text-white shadow-sm'
                     : isActive
                       ? `border-2 ${palette.badge.split(' ').find((c) => c.startsWith('border-')) ?? 'border-indigo-400'} bg-white text-slate-900 shadow-md ring-2 ring-indigo-200/50`
                       : 'border-slate-200 bg-white text-slate-400'
-                }`}
+                  }`}
               >
                 {isCompleted ? (
                   <CheckCircle2 className="size-4 text-white" />
@@ -148,13 +147,12 @@ function ZoneStepper({
                 )}
               </div>
               <span
-                className={`hidden text-[10px] font-semibold tracking-wide transition-all duration-300 sm:block ${
-                  isActive
+                className={`hidden text-[10px] font-semibold tracking-wide transition-all duration-300 sm:block ${isActive
                     ? 'text-slate-800'
                     : isCompleted
                       ? 'text-emerald-600'
                       : 'text-slate-400'
-                }`}
+                  }`}
               >
                 {zone.name}
               </span>
@@ -163,9 +161,8 @@ function ZoneStepper({
             {/* Connector line */}
             {idx < zones.length - 1 && (
               <div
-                className={`mx-1 mb-4 h-0.5 flex-1 transition-all duration-500 sm:mx-2 ${
-                  zone.number < currentZone ? 'bg-emerald-400' : 'bg-slate-200'
-                }`}
+                className={`mx-1 mb-4 h-0.5 flex-1 transition-all duration-500 sm:mx-2 ${zone.number < currentZone ? 'bg-emerald-400' : 'bg-slate-200'
+                  }`}
                 style={{ minWidth: '1.5rem' }}
               />
             )}
@@ -267,11 +264,10 @@ function FeedbackPanel({ feedback, zone }: { feedback: DiagnoseResponse; zone: n
 
   return (
     <div
-      className={`rounded-2xl border p-5 transition-all duration-300 ease-in-out ${
-        isCorrect
+      className={`rounded-2xl border p-5 transition-all duration-300 ease-in-out ${isCorrect
           ? 'border-emerald-200/80 bg-emerald-50/60'
           : 'border-amber-200/80 bg-amber-50/60'
-      }`}
+        }`}
       style={{ animation: 'fadeSlideIn 0.35s ease-out both' }}
     >
       {/* Header */}
@@ -490,32 +486,42 @@ export default function StudentQuiz({
       const diagData = data as DiagnoseResponse
       setFeedback(diagData)
 
-      // Save response to Supabase
-      const hintsUsed = hints.slice(0, revealedHints)
-      const { error: insertError } = await supabase.from('responses').insert({
-        session_id: sessionId,
-        zone_number: currentZone,
-        question_text: questionText,
-        student_answer: answer,
-        student_reasoning: reasoning,
-        is_correct: diagData.isCorrect,
-        detected_misconception: diagData.detectedMisconception,
-        ai_explanation: diagData.explanation,
-        hints_used: hintsUsed,
-      })
+      // Save response to Supabase gracefully (Non-blocking)
+      try {
+        const hintsUsed = hints.slice(0, revealedHints)
+        const { error: insertError } = await supabase.from('responses').insert({
+          session_id: sessionId,
+          zone_number: currentZone,
+          question_text: questionText,
+          student_answer: answer,
+          student_reasoning: reasoning,
+          is_correct: diagData.isCorrect,
+          detected_misconception: diagData.detectedMisconception,
+          ai_explanation: diagData.explanation,
+          hints_used: hintsUsed,
+        })
 
-      if (insertError) throw new Error(insertError.message)
+        if (insertError) {
+          console.warn('Supabase DB Insert Warning (non-blocking):', insertError.message)
+        }
+      } catch (dbErr) {
+        console.warn('Database insert failed gracefully:', dbErr)
+      }
 
       // Handle zone completion
       if (currentZone >= 5) {
-        await supabase
-          .from('quiz_sessions')
-          .update({
-            current_zone: 5,
-            completed: true,
-            completed_at: new Date().toISOString(),
-          })
-          .eq('id', sessionId)
+        try {
+          await supabase
+            .from('quiz_sessions')
+            .update({
+              current_zone: 5,
+              completed: true,
+              completed_at: new Date().toISOString(),
+            })
+            .eq('id', sessionId)
+        } catch (dbErr) {
+          console.warn('Failed to update session state:', dbErr)
+        }
 
         setCompleted(true)
         return
@@ -524,10 +530,14 @@ export default function StudentQuiz({
       // Advance to next zone after a brief feedback moment
       const nextZone = currentZone + 1
 
-      await supabase
-        .from('quiz_sessions')
-        .update({ current_zone: nextZone })
-        .eq('id', sessionId)
+      try {
+        await supabase
+          .from('quiz_sessions')
+          .update({ current_zone: nextZone })
+          .eq('id', sessionId)
+      } catch (dbErr) {
+        console.warn('Failed to update quiz zone:', dbErr)
+      }
 
       // Animate zone transition
       setTimeout(() => {
@@ -578,9 +588,8 @@ export default function StudentQuiz({
       {/* ── Main quiz card ────────────────────────────────────────────────── */}
       <div
         ref={cardRef}
-        className={`transition-all duration-350 ease-in-out ${
-          transitioningZone ? 'scale-[0.98] opacity-0' : 'scale-100 opacity-100'
-        }`}
+        className={`transition-all duration-350 ease-in-out ${transitioningZone ? 'scale-[0.98] opacity-0' : 'scale-100 opacity-100'
+          }`}
       >
         <Card
           className={`overflow-hidden border bg-white shadow-xl transition-all duration-300 ${palette.glow}`}
