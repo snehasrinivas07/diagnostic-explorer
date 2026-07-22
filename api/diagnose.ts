@@ -1,6 +1,16 @@
 /**
  * api/diagnose.ts
- * Vercel Serverless Function — Gemini 3.6 Flash adaptive diagnostic proxy.
+ * Vercel Serverless Function — Gemini adaptive diagnostic proxy.
+ *
+ * Responsibilities:
+ *  1. Validate inbound request (method, body shape, field ranges).
+ *  2. Build a zone-aware, difficulty-calibrated prompt.
+ *  3. Call Gemini with structured JSON output (responseSchema).
+ *  4. Normalise & sanitise the parsed response.
+ *  5. Return the DiagnoseResult or a structured error.
+ *
+ * Environment variables required:
+ *  - GEMINI_API_KEY  (server-side only — never exposed to the browser)
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -61,25 +71,37 @@ const responseSchema: Schema = {
   properties: {
     isCorrect: {
       type: SchemaType.BOOLEAN,
-      description: 'true if the student answer is substantially correct for the zone level and difficulty.',
+      description:
+        'true if the student answer is substantially correct for the zone level and difficulty.',
     },
     detectedMisconception: {
       type: SchemaType.STRING,
       nullable: true,
-      description: 'A short label for the cognitive misconception, or null if correct/none.',
+      description:
+        'A short, specific label for a single underlying cognitive misconception (e.g. "confuses stack and queue ordering"). ' +
+        'Return null or empty string if the answer was correct or no clear misconception is identifiable.',
     },
     explanation: {
       type: SchemaType.STRING,
-      description: 'Teacher-facing analysis of answer quality (2-4 sentences). Do not give answer.',
+      description:
+        'Teacher-facing analysis of the answer quality, reasoning gaps, and misconceptions in 2–4 sentences. ' +
+        'Be precise and educational. Do not reveal the answer directly.',
     },
     nextQuestion: {
       type: SchemaType.STRING,
-      description: 'Full text of the next adaptive question.',
+      description:
+        'The complete text of the next adaptive question. If answering correctly, increase challenge slightly. ' +
+        'If struggling, scaffold with a simpler sub-concept before advancing. ' +
+        'Must be a full, self-contained question string — no preamble.',
     },
     hints: {
       type: SchemaType.ARRAY,
       items: { type: SchemaType.STRING },
-      description: 'Exactly 3 progressive hints for the nextQuestion.',
+      description:
+        'Exactly 3 progressive hints for the nextQuestion: ' +
+        'hint[0] = subtle nudge (direction, not answer), ' +
+        'hint[1] = moderate clarification, ' +
+        'hint[2] = near-direct guide. Each hint is a single sentence.',
     },
   },
   required: [
@@ -111,11 +133,11 @@ function robustParseJson(rawText: string): unknown {
   // Step 3: Replace smart/curly quotes with standard double quotes
   cleaned = cleaned.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'")
 
-  // Step 4: First pass attempt standard parse
+  // Step 4: Try standard JSON.parse first
   try {
     return JSON.parse(cleaned)
   } catch (e) {
-    // Step 5: Fix unescaped newlines inside JSON string properties
+    // Step 5: Fallback repair for unescaped line breaks inside strings
     cleaned = cleaned.replace(/(?<=:\s*"[^"]*)\n(?=[^"]*")/g, '\\n')
     return JSON.parse(cleaned)
   }
@@ -146,9 +168,11 @@ REQUIREMENTS
   • Create one clear, focused question appropriate for ${body.difficulty} level at the "${zoneLabel}" cognitive level.
   • Place the full question text in "nextQuestion".
   • Provide exactly 3 progressive hints: subtle → moderate → near-direct.
-  • Set "isCorrect" to false.
+  • Set "isCorrect" to false (no answer yet).
   • Set "detectedMisconception" to null.
-  • In "explanation", briefly describe what cognitive skill this question is designed to surface.`
+  • In "explanation", briefly describe what cognitive skill this question is designed to surface.
+
+Return valid JSON matching the specified schema.`
 }
 
 function buildEvaluationPrompt(body: DiagnoseBody): string {
@@ -177,10 +201,19 @@ STUDENT REASONING
 
 EVALUATION TASKS
   1. Evaluate correctness at the "${zoneLabel}" cognitive level and ${body.difficulty} difficulty.
-  2. Identify ONE specific underlying cognitive misconception if incorrect, else set detectedMisconception to null.
-  3. Write a 2–4 sentence teacher-facing explanation.
-  4. Generate the NEXT adaptive question for Zone ${body.zoneNumber}.
-  5. Provide exactly 3 new progressive hints for that next question.`
+     Partial credit counts as incorrect unless the CORE concept is fully sound.
+  2. If incorrect or partially wrong, identify ONE specific underlying cognitive misconception
+     (e.g. "confuses time complexity with space complexity", "applies formula without understanding units").
+     If correct, set detectedMisconception to null.
+  3. Write a 2–4 sentence teacher-facing explanation: analyse answer quality, identify reasoning gaps,
+     do NOT directly reveal the correct answer.
+  4. Generate the NEXT adaptive question for Zone ${body.zoneNumber}:
+     - If student mastered this zone: increase challenge slightly within the same zone.
+     - If student struggled: scaffold with a simpler sub-concept before full zone mastery.
+     The question must be a complete, self-contained sentence.
+  5. Provide exactly 3 new progressive hints for that next question.
+
+Return valid JSON matching the specified schema.`
 }
 
 // ─── Input validation ─────────────────────────────────────────────────────────
@@ -222,6 +255,13 @@ function validateBody(raw: unknown): ValidationResult {
     }
     if (typeof b.studentAnswer !== 'string' || !b.studentAnswer.trim()) {
       return { ok: false, status: 400, error: '"studentAnswer" is required when isFirstQuestion is not true.' }
+    }
+  }
+
+  const MAX_LEN = 4000
+  for (const [field, val] of Object.entries(b)) {
+    if (typeof val === 'string' && val.length > MAX_LEN) {
+      return { ok: false, status: 400, error: `Field "${field}" exceeds maximum allowed length of ${MAX_LEN} characters.` }
     }
   }
 
@@ -283,6 +323,7 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ): Promise<void> {
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
@@ -302,7 +343,7 @@ export default async function handler(
 
   if (!apiKey) {
     console.error('[diagnose] GEMINI_API_KEY is not set in environment.')
-    res.status(500).json({ error: 'GEMINI_API_KEY is not configured.' })
+    res.status(500).json({ error: 'GEMINI_API_KEY is not configured in environment variables.' })
     return
   }
 
@@ -321,12 +362,12 @@ export default async function handler(
   try {
     const genAI = new GoogleGenerativeAI(apiKey)
 
+    // Using gemini-2.5-flash for fast and structured adaptive evaluation
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
         responseSchema,
-        temperature: body.isFirstQuestion ? 0.7 : 0.4,
       },
     })
 
@@ -334,6 +375,7 @@ export default async function handler(
     const rawText = result.response.text()
 
     if (!rawText || rawText.trim().length === 0) {
+      console.error('[diagnose] Gemini returned an empty response.')
       res.status(502).json({ error: 'The AI returned an empty response. Please try again.' })
       return
     }
@@ -341,8 +383,8 @@ export default async function handler(
     let parsed: unknown
     try {
       parsed = robustParseJson(rawText)
-    } catch (parseErr) {
-      console.error('[diagnose] Parse error. Raw output was:', rawText)
+    } catch (parseError) {
+      console.error('[diagnose] Failed to parse Gemini response raw text:', rawText)
       res.status(502).json({ error: 'The AI returned an unparseable response. Please try again.' })
       return
     }
@@ -350,7 +392,7 @@ export default async function handler(
     const normalised = normaliseResult(parsed)
 
     if (!normalised) {
-      console.error('[diagnose] Normalisation failed. Parsed:', parsed)
+      console.error('[diagnose] Normalisation failed. Parsed structure:', parsed)
       res.status(502).json({ error: 'The AI response was structurally invalid. Please try again.' })
       return
     }
@@ -358,7 +400,7 @@ export default async function handler(
     res.status(200).json(normalised)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.error('[diagnose] Gemini API error:', message)
+    console.error('[diagnose] Gemini API execution error:', message)
     res.status(500).json({ error: `AI Diagnostic Error: ${message}` })
   }
 }
